@@ -16,10 +16,11 @@ public class Stats
 	
 	public void sendStatsAsMessage(TextChannel channel)
 	{
-		String botMsg = "Nombre total de messages sur ce serveur : " + nbTotalMessages + "\n";
+		String botMsg = "Nombre total de messages : " + nbTotalMessages + "\n";
 		
 		for (Map.Entry<String, Integer> entry : nbMessagesByAuthor.entrySet()) {
-			botMsg += channel.getGuild().getMemberById(entry.getKey()).getEffectiveName() + " a écrit " + entry.getValue() + " messages\n";
+			botMsg += channel.getGuild().getMemberById(entry.getKey()).getEffectiveName() + " a écrit " + entry.getValue() + " messages";
+			botMsg += ", soit " + (entry.getValue() * 100) / nbTotalMessages + "% de tous les messages.\n";
 		}
 		
 		channel.sendMessage(botMsg).queue();

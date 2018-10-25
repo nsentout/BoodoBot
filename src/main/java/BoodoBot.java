@@ -39,7 +39,7 @@ public class BoodoBot extends ListenerAdapter
 					.build();
 			jda.awaitReady();
             
-			System.out.println("Finished Building JDA!");
+			System.out.println("Finished building JDA!");
 		}
 		catch (LoginException | InterruptedException e) {
 			e.printStackTrace();
@@ -55,27 +55,9 @@ public class BoodoBot extends ListenerAdapter
     public void onMessageReceived(MessageReceivedEvent event)
     {
 		User author = event.getAuthor();	
-		Message message = event.getMessage();
 		TextChannel channel = event.getTextChannel();
 		Guild server = event.getGuild();
-			
-		String msg = message.getContentDisplay();
-			
-		if (event.isFromType(ChannelType.TEXT))
-		{				
-			TextChannel textChannel = event.getTextChannel();
-			Member member = event.getMember(); 
-				
-			String name;
-			if (message.isWebhookMessage()) {
-			    name = author.getName();                //If this is a Webhook message, then there is no Member associated
-			}                                           // with the User, thus we default to the author for name.
-			else {
-			    name = member.getEffectiveName();       //This will either use the Member's nickname if they have one,
-			}                                           // otherwise it will default to their username. (User#getName())
-			
-			System.out.printf("(%s)[%s]<%s>: %s\n", server.getName(), textChannel.getName(), name, msg);
-		}
+		String msg = event.getMessage().getContentDisplay();
 		
 		// Roll a 100-sided dice
 		if (msg.equals("!roll"))
@@ -111,7 +93,6 @@ public class BoodoBot extends ListenerAdapter
 				stats.nbTotalMessages += cStats.nbTotalMessages;
 				stats.addEqual(cStats.nbMessagesByAuthor);
 			}
-			
 			stats.sendStatsAsMessage(channel);
 		}
 		
@@ -223,7 +204,6 @@ public class BoodoBot extends ListenerAdapter
 		catch (InterruptedException | ExecutionException e) {
 			e.printStackTrace();
 		}
-		
 		
 		return stats;
     }
