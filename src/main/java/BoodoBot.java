@@ -1,4 +1,3 @@
-import net.dv8tion.jda.client.entities.Group;
 import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.JDABuilder;
 import net.dv8tion.jda.core.entities.*;
@@ -57,10 +56,10 @@ public class BoodoBot extends ListenerAdapter
     {
 		User author = event.getAuthor();	
 		Message message = event.getMessage();
-		TextChannel channel = event.getTextChannel();    //This is the MessageChannel that the message was sent to. This could be a TextChannel, PrivateChannel, or Group!
+		TextChannel channel = event.getTextChannel();
 		Guild server = event.getGuild();
 			
-		String msg = message.getContentDisplay(); 
+		String msg = message.getContentDisplay();
 			
 		if (event.isFromType(ChannelType.TEXT))
 		{				
@@ -77,26 +76,13 @@ public class BoodoBot extends ListenerAdapter
 			
 			System.out.printf("(%s)[%s]<%s>: %s\n", server.getName(), textChannel.getName(), name, msg);
 		}
-		else if (event.isFromType(ChannelType.GROUP))   //If this message was sent to a Group. This is CLIENT only!
-		{
-		    //The message was sent in a Group. It should be noted that Groups are CLIENT only.
-		    Group group = event.getGroup();
-		    String groupName = group.getName() != null ? group.getName() : "";  //A group name can be null due to it being unnamed.
-		
-		    System.out.printf("[GRP: %s]<%s>: %s\n", groupName, author.getName(), msg);
-		}
-		
-		if (msg.equals("!ping"))
-		{
-		    channel.sendMessage("pong!").queue();
-		}
 		
 		// Roll a 100-sided dice
-		else if (msg.equals("!roll"))
+		if (msg.equals("!roll"))
 		{			
 		    Random rand = new Random();
 		    int roll = rand.nextInt(100) + 1;
-		    channel.sendMessage(author.getName() + "a lancé un dé 100 ... ").queue();
+		    channel.sendMessage(author.getName() + " a lancé un dé 100 ... ").queue();
 		    channel.sendMessage("Il a fait " + roll + " !").queueAfter(2000, TimeUnit.MILLISECONDS);
 		}
 		
@@ -104,7 +90,10 @@ public class BoodoBot extends ListenerAdapter
 		else if (msg.equals("!stats"))
 		{
 			Stats stats = getChannelStats(event.getTextChannel());
-			stats.sendStatsAsMessage(channel);
+			if (stats != null)
+				stats.sendStatsAsMessage(channel);
+			else
+				channel.sendMessage("The command failed!");
 		}
 		
 		// Display stats for every channel on the server
@@ -113,8 +102,14 @@ public class BoodoBot extends ListenerAdapter
 			Stats stats = new Stats();
 			for (TextChannel c : server.getTextChannels()) {
 				Stats cStats = getChannelStats(c);
+				
+				if (cStats == null) {
+					channel.sendMessage("The command failed!");
+					return;
+				}
+				
 				stats.nbTotalMessages += cStats.nbTotalMessages;
-				stats.addEqual(cStats.nbMessages);
+				stats.addEqual(cStats.nbMessagesByAuthor);
 			}
 			
 			stats.sendStatsAsMessage(channel);
@@ -139,7 +134,10 @@ public class BoodoBot extends ListenerAdapter
 			}
 			
 			Stats stats = getChannelStats(chosenChannel);
-			stats.sendStatsAsMessage(channel);
+			if (stats != null)
+				stats.sendStatsAsMessage(channel);
+			else
+				channel.sendMessage("The command failed!");
 		}
 		
 		// Clear all messages that are not integers (for debug purpose)
@@ -173,13 +171,13 @@ public class BoodoBot extends ListenerAdapter
 
 					channel.purgeMessages(ToDeleteMessages);
 					last = request.get().getRetrievedHistory().get(nbReadMsg - 1).getId();	// last message read
-				}				
+				}
 			}
 			catch (InterruptedException | ExecutionException e) {
 				e.printStackTrace();
 			}
 			
-			System.out.println("Cleared all messages that are not integers!");
+			logger.debug("Cleared all messages that are not integers!");
 		}
 	}
     
@@ -187,6 +185,11 @@ public class BoodoBot extends ListenerAdapter
     
     private Stats getChannelStats(TextChannel channel)
     {
+    	if (!channel.hasLatestMessage()) {
+    		logger.debug("The channel doesn't have a tracked most recentmessage");
+    		return null;
+    	}
+    	
     	String last = channel.getLatestMessageId();
 		RequestFuture<MessageHistory> request;
 		List<Message> messagesRetrieved;
@@ -208,10 +211,10 @@ public class BoodoBot extends ListenerAdapter
 				for (Message m : messagesRetrieved) {
 					String authorId = m.getAuthor().getId();
 					
-					if (!stats.nbMessages.containsKey(authorId)) {
-						stats.nbMessages.put(authorId, 0);
+					if (!stats.nbMessagesByAuthor.containsKey(authorId)) {
+						stats.nbMessagesByAuthor.put(authorId, 0);
 					}
-					stats.nbMessages.put(authorId, stats.nbMessages.get(authorId) + 1);
+					stats.nbMessagesByAuthor.put(authorId, stats.nbMessagesByAuthor.get(authorId) + 1);
 				}
 						
 				last = messagesRetrieved.get(nbReadMsg - 1).getId();	// last message read

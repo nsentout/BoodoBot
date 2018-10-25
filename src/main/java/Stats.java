@@ -6,38 +6,36 @@ import net.dv8tion.jda.core.entities.TextChannel;
 public class Stats
 {
 	public int nbTotalMessages;
-	public HashMap<String, Integer> nbMessages;
+	public HashMap<String, Integer> nbMessagesByAuthor;
 	
 	public Stats()
 	{
 		nbTotalMessages = 0;
-		nbMessages = new HashMap<String, Integer>();
+		nbMessagesByAuthor = new HashMap<String, Integer>();
 	}
 	
 	public void sendStatsAsMessage(TextChannel channel)
 	{
-		channel.sendMessage("Nombre total de messages sur ce serveur : " + nbTotalMessages).queue();
+		String botMsg = "Nombre total de messages sur ce serveur : " + nbTotalMessages + "\n";
 		
-		for (Map.Entry<String, Integer> entry : nbMessages.entrySet()) {
-			channel.sendMessage(channel.getGuild().getMemberById(entry.getKey()).getEffectiveName() + " a écrit " + entry.getValue() + " messages").queue();
+		for (Map.Entry<String, Integer> entry : nbMessagesByAuthor.entrySet()) {
+			botMsg += channel.getGuild().getMemberById(entry.getKey()).getEffectiveName() + " a écrit " + entry.getValue() + " messages\n";
 		}
+		
+		channel.sendMessage(botMsg).queue();
 	}
 	
-	public HashMap<String, Integer> addEqual(HashMap<String, Integer> nbMessages)
+	public void addEqual(HashMap<String, Integer> nbMessages)
 	{
-		HashMap<String, Integer> result = nbMessages;
-		
-		for (Map.Entry<String, Integer> entry : nbMessages.entrySet()) {
-			if (this.nbMessages.containsKey(entry.getKey())) {
-				this.nbMessages.put(entry.getKey(), entry.getValue() + nbMessages.get(entry.getKey()));
+		for (Map.Entry<String, Integer> entry : nbMessages.entrySet())
+		{
+			if (this.nbMessagesByAuthor.containsKey(entry.getKey())) {
+				this.nbMessagesByAuthor.put(entry.getKey(), this.nbMessagesByAuthor.get(entry.getKey()) + entry.getValue());
 			}
 			else {
-				this.nbMessages.put(entry.getKey(), nbMessages.get(entry.getKey()));
+				System.out.println("no: " + nbMessages.get(entry.getKey()));
+				this.nbMessagesByAuthor.put(entry.getKey(), nbMessages.get(entry.getKey()));
 			}
 		}
-		
-		System.out.println("size : " + this.nbMessages.size());
-		
-		return result;
 	}
 }

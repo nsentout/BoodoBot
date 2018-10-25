@@ -23,4 +23,4 @@ gradle-app.setting
 bin/
 
 # BoodoBot
-#bot_token.txt
+bot_token.txt
