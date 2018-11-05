@@ -49,8 +49,16 @@ public class MessageStats
 
 		int totalMsg = 0;
 		
+		// Add all the messages already in the db to totalMsg
+		for (Document doc : ite) {
+			totalMsg += (int)doc.get(NB_MESSAGES_KEY);
+		}
+		
 		for (Map.Entry<String, Integer> entry : nbMessagesByAuthor.entrySet())
 		{
+			// add all the new messages
+			totalMsg += entry.getValue();
+			
 			// if there is already a document for this channel, search if there is a document for this user on this channel
 			if (ite.first() != null) {
 				Bson filter = Filters.and(Filters.eq(CHANNEL_ID_KEY, channel.getId()), Filters.eq(USER_ID_KEY, entry.getKey()));
@@ -60,25 +68,21 @@ public class MessageStats
 				if (doc != null) {
 					ObjectId objectId = (ObjectId) doc.get("_id");
 					int nbMsgSinceLastTime = (int)doc.get(NB_MESSAGES_KEY);
-					totalMsg += nbMsgSinceLastTime + entry.getValue();
 					
 					collection.updateOne(Filters.eq("_id",objectId),		// update it in the db
 							Updates.combine(Updates.set(NB_MESSAGES_KEY, entry.getValue() + nbMsgSinceLastTime), 
-											Updates.set(LAST_MESSAGE_READ_ID_KEY, lastMsgRead)));
-					
-					nbMessagesByAuthor.put(entry.getKey(), nbMessagesByAuthor.get(entry.getKey()) + nbMsgSinceLastTime);
+											Updates.set(LAST_MESSAGE_READ_ID_KEY, lastMsgRead)));;
 				}
 				// else, create his document
 				else {
 					documents.add(new Document(SERVER_NAME_KEY, server.getName())
 							.append(CHANNEL_NAME_KEY, channel.getName())
-							.append(USER_NAME_KEY, server.getMemberById(entry.getKey()).getEffectiveName() )
+							.append(USER_NAME_KEY, server.getMemberById(entry.getKey()).getEffectiveName())
 							.append(NB_MESSAGES_KEY, entry.getValue())
 							.append(TOTAL_MESSAGES_CHANNEL_KEY, 0)
 							.append(CHANNEL_ID_KEY, channel.getId())
 							.append(USER_ID_KEY, entry.getKey())
 							.append(LAST_MESSAGE_READ_ID_KEY, lastMsgRead));
-					totalMsg += entry.getValue();
 				}
 			}
 			
@@ -86,13 +90,12 @@ public class MessageStats
 			else {
 				documents.add(new Document(SERVER_NAME_KEY, server.getName())
 						.append(CHANNEL_NAME_KEY, channel.getName())
-						.append(USER_NAME_KEY, server.getMemberById(entry.getKey()).getEffectiveName() )
+						.append(USER_NAME_KEY, server.getMemberById(entry.getKey()).getEffectiveName())
 						.append(NB_MESSAGES_KEY, entry.getValue())
 						.append(TOTAL_MESSAGES_CHANNEL_KEY, 0)
 						.append(CHANNEL_ID_KEY, channel.getId())
 						.append(USER_ID_KEY, entry.getKey())
 						.append(LAST_MESSAGE_READ_ID_KEY, lastMsgRead));
-				totalMsg += entry.getValue();
 			}
 		}
 		
