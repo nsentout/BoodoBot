@@ -8,6 +8,12 @@ import net.dv8tion.jda.core.requests.RequestFuture;
 import javax.security.auth.login.LoginException;
 
 import org.apache.logging.log4j.*;
+import org.bson.Document;
+
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -23,20 +29,36 @@ public class BoodoBot extends ListenerAdapter
 {
 	/********************************************************************************************************************************/
 	
-	private final static String BOT_TOKEN_FILE = "bot_token.txt";
+	private final static String BOT_TOKEN_FILE_NAME = "bot_token.txt";
+	private final static String MONGODB_DB_NAME = "BoodoBot";
+	private final static String MONGODB_COLLECTION_NAME = "MessageStats";
 	
-	final static Logger logger = LogManager.getLogger(BoodoBot.class);
+	private final static Logger logger = LogManager.getLogger(BoodoBot.class);
+	
+	private static MessageStats msgStats;
+	
+	private static MongoCollection<Document> collection;
 	
 	/********************************************************************************************************************************/
     
 	public static void main(String[] args)
 	{
 		try {
-			String botToken = new String(Files.readAllBytes(Paths.get(BOT_TOKEN_FILE))); 
+			// Retrieve the bot token
+			String botToken = new String(Files.readAllBytes(Paths.get(BOT_TOKEN_FILE_NAME))); 
 			
+			// Build JDA
 			JDA jda = new JDABuilder(botToken)
 					.addEventListener(new BoodoBot()) 
 					.build();
+			
+			// Connection to MongoDB
+			MongoClient mongoClient = MongoClients.create();
+			MongoDatabase database = mongoClient.getDatabase(MONGODB_DB_NAME);
+			collection = database.getCollection(MONGODB_COLLECTION_NAME);
+			
+			msgStats = new MessageStats(collection);
+			
 			jda.awaitReady();
             
 			System.out.println("Finished building JDA!");
@@ -45,7 +67,7 @@ public class BoodoBot extends ListenerAdapter
 			e.printStackTrace();
 		}
 		catch (IOException e) {
-			logger.fatal("An error occured when reading the file containing the bot token");
+			System.err.println("An error occured when reading the file containing the bot token");
 		}
 	}
 
@@ -61,44 +83,50 @@ public class BoodoBot extends ListenerAdapter
 		
 		// Roll a 100-sided dice
 		if (msg.equals("!roll"))
-		{			
+		{
+			System.out.println("Call command " + msg);
+			
 		    Random rand = new Random();
 		    int roll = rand.nextInt(100) + 1;
 		    channel.sendMessage(author.getName() + " a lancé un dé 100 ... ").queue();
-		    channel.sendMessage("Il a fait " + roll + " !").queueAfter(2000, TimeUnit.MILLISECONDS);
+		    channel.sendMessage("Il a fait " + roll + " !").queueAfter(1500, TimeUnit.MILLISECONDS);
 		}
 		
 		// Display stats for this channel
 		else if (msg.equals("!stats"))
 		{
-			Stats stats = getChannelStats(event.getTextChannel());
-			if (stats != null)
-				stats.sendStatsAsMessage(channel);
+			System.out.println("Call command " + msg);
+			
+			boolean success = retrieveChannelStats(event.getTextChannel());
+			if (success)
+				msgStats.sendStatsAsMessage(event.getTextChannel());
 			else
-				channel.sendMessage("The command failed!");
+				channel.sendMessage("La commande a échoué !").queue();
 		}
 		
 		// Display stats for every channel on the server
-		else if (msg.equals("!statsall"))
+		else if (msg.equals("!stats all"))
 		{
-			Stats stats = new Stats();
-			for (TextChannel c : server.getTextChannels()) {
-				Stats cStats = getChannelStats(c);
-				
-				if (cStats == null) {
-					channel.sendMessage("The command failed!");
+			System.out.println("Call command " + msg);
+			
+			for (TextChannel c : server.getTextChannels())
+			{
+				boolean success = retrieveChannelStats(c);
+				if (!success) {
+					channel.sendMessage("La commande a échoué !").queue();
 					return;
 				}
 				
-				stats.nbTotalMessages += cStats.nbTotalMessages;
-				stats.addEqual(cStats.nbMessagesByAuthor);
+
 			}
-			stats.sendStatsAsMessage(channel);
+			msgStats.sendStatsAsMessage(channel);
 		}
 		
 		// Display stats for a chosen channel
-		else if (msg.contains("!stats"))
+		else if (msg.startsWith("!stats"))
 		{
+			System.out.println("Call command " + msg);
+			
 			String channelName = msg.substring(7);
 			TextChannel chosenChannel = null;
 			
@@ -110,15 +138,17 @@ public class BoodoBot extends ListenerAdapter
 			}
 			
 			if (chosenChannel == null) {
-				logger.error("!stats <channel> : this channel doesn't exist");
+				System.err.println("!stats <channel> : this channel doesn't exist");
 				return;
 			}
 			
-			Stats stats = getChannelStats(chosenChannel);
-			if (stats != null)
-				stats.sendStatsAsMessage(channel);
-			else
-				channel.sendMessage("The command failed!");
+			boolean success = retrieveChannelStats(chosenChannel);
+			if (success) {
+				msgStats.sendStatsAsMessage(channel, chosenChannel.getId());
+			}
+			else {
+				channel.sendMessage("La commande a échoué !").queue();
+			}
 		}
 		
 		// Clear all messages that are not integers (for debug purpose)
@@ -126,6 +156,8 @@ public class BoodoBot extends ListenerAdapter
 		{
 			if (!server.getId().equals("504371617888206866"))	// only doable in the test server
 				return;
+			
+			System.out.println("Call command " + msg);
 			
 			String last = channel.getLatestMessageId();
 			RequestFuture<MessageHistory> request; 
@@ -160,52 +192,102 @@ public class BoodoBot extends ListenerAdapter
 			
 			logger.debug("Cleared all messages that are not integers!");
 		}
+		
+		// Find a message thanks to its id (for debug purpose)
+		else if (msg.startsWith("!find"))
+		{
+			if (!server.getId().equals("504371617888206866"))	// only doable in the test server
+				return;
+			
+			System.out.println("Call command " + msg);
+			
+			String msgId = msg.substring(6);
+			
+			Message foundMsg = channel.getMessageById(msgId).complete();
+			if (foundMsg != null) {
+				System.out.println("message content: " + foundMsg.getContentDisplay());
+				System.out.println("creation time: " + foundMsg.getCreationTime());
+			}
+			else {
+				System.out.println("no message with this id");
+			}
+		}
+		
+		// If it's an unknown command, do nothing
+		else if (msg.startsWith("!")) {
+			System.out.println("Unknown command!");
+			channel.sendMessage("Cette commande n'existe pas, bolosse").queue();
+		}
 	}
     
     /********************************************************************************************************************************/
     
-    private Stats getChannelStats(TextChannel channel)
+    private boolean retrieveChannelStats(TextChannel channel)
     {
     	if (!channel.hasLatestMessage()) {
-    		logger.debug("The channel doesn't have a tracked most recentmessage");
-    		return null;
+    		System.out.println("The channel doesn't have a tracked most recent message");
+    		return false;
     	}
     	
-    	String last = channel.getLatestMessageId();
+    	String lastMsgId;	// last message retrieved
+    	boolean firstTime = false;	// first time calling the stats command
+    	
+    	// If first time getting the stats of this channel, retrieve all messages since the creation of the channel
+    	if (msgStats.getLastMessageReadId(channel.getId()).isEmpty()) {
+    		lastMsgId = channel.getLatestMessageId();
+    		firstTime = true;
+    	}
+    	// Else, retrieve all messages since the last time we get the stats
+    	else {
+    		lastMsgId = msgStats.getLastMessageReadId(channel.getId());
+    	}
+    	
 		RequestFuture<MessageHistory> request;
-		List<Message> messagesRetrieved;
+		List<Message> messagesRetrieved = null;
 		
 		int nbReadMsg = 0;
-		Stats stats = new Stats();
-			
+		
+		// Retrieve messages
 		try {
 			while (true) {
-				request = channel.getHistoryBefore(last, 100).submit();	// get the 100 messages sent before the <last> message
+				if (firstTime)
+					request = channel.getHistoryBefore(lastMsgId, 20).submit();	// get the 100 messages sent before the <lastMsgId> message
+				else
+					request = channel.getHistoryAfter(lastMsgId, 20).submit();	// get the 100 messages sent after the <lastMsgId> message
+				
 				nbReadMsg =  request.get().size();	// request.get() is very expansive
 
 				if (nbReadMsg == 0)
 					break;
-				
-				stats.nbTotalMessages += nbReadMsg;
+					
 				messagesRetrieved = request.get().getRetrievedHistory();
 				
 				for (Message m : messagesRetrieved) {
 					String authorId = m.getAuthor().getId();
 					
-					if (!stats.nbMessagesByAuthor.containsKey(authorId)) {
-						stats.nbMessagesByAuthor.put(authorId, 0);
+					if (!msgStats.nbMessagesByAuthor.containsKey(authorId)) {
+						msgStats.nbMessagesByAuthor.put(authorId, 0);
 					}
-					stats.nbMessagesByAuthor.put(authorId, stats.nbMessagesByAuthor.get(authorId) + 1);
+					msgStats.nbMessagesByAuthor.put(authorId, msgStats.nbMessagesByAuthor.get(authorId) + 1);
 				}
-						
-				last = messagesRetrieved.get(nbReadMsg - 1).getId();	// last message read
+				
+				if (firstTime)
+					lastMsgId = messagesRetrieved.get(nbReadMsg - 1).getId();	// last message read
+				else
+					lastMsgId = messagesRetrieved.get(0).getId();	// last message read
 			}			
 		}
 		catch (InterruptedException | ExecutionException e) {
 			e.printStackTrace();
 		}
 		
-		return stats;
+		// Save the stats in the db
+		if (firstTime)
+			lastMsgId = channel.getLatestMessageId();
+			
+		msgStats.saveMessageStats(channel, lastMsgId);
+		
+		return true;
     }
     
     /********************************************************************************************************************************/
