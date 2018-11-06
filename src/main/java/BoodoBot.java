@@ -14,11 +14,13 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Aggregates;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
@@ -31,13 +33,16 @@ public class BoodoBot extends ListenerAdapter
 	
 	private final static String BOT_TOKEN_FILE_NAME = "bot_token.txt";
 	private final static String MONGODB_DB_NAME = "BoodoBot";
-	private final static String MONGODB_COLLECTION_NAME = "MessageStats";
+	private final static String MONGODB_MESSAGE_STATS_NAME = "MessageStats";
+	private final static String MONGODB_INSULTS_NAME = "Insultes";
+	private final static String BOT_ID = "504368489415573514";
 	
 	private final static Logger logger = LogManager.getLogger(BoodoBot.class);
 	
 	private static MessageStats msgStats;
 	
-	private static MongoCollection<Document> collection;
+	private static MongoCollection<Document> messageStatsCollection;
+	private static MongoCollection<Document> insultsCollection;
 	
 	/********************************************************************************************************************************/
     
@@ -55,9 +60,10 @@ public class BoodoBot extends ListenerAdapter
 			// Connection to MongoDB
 			MongoClient mongoClient = MongoClients.create();
 			MongoDatabase database = mongoClient.getDatabase(MONGODB_DB_NAME);
-			collection = database.getCollection(MONGODB_COLLECTION_NAME);
+			messageStatsCollection = database.getCollection(MONGODB_MESSAGE_STATS_NAME);
+			insultsCollection = database.getCollection(MONGODB_INSULTS_NAME);
 			
-			msgStats = new MessageStats(collection);
+			msgStats = new MessageStats(messageStatsCollection);
 			
 			jda.awaitReady();
             
@@ -104,6 +110,7 @@ public class BoodoBot extends ListenerAdapter
 				channel.sendMessage("La commande a échoué !").queue();
 		}
 		
+		/*
 		// Display stats for every channel on the server
 		else if (msg.equals("!stats all"))
 		{
@@ -116,11 +123,10 @@ public class BoodoBot extends ListenerAdapter
 					channel.sendMessage("La commande a échoué !").queue();
 					return;
 				}
-				
-
 			}
 			msgStats.sendStatsAsMessage(channel);
 		}
+		*/
 		
 		// Display stats for a chosen channel
 		else if (msg.startsWith("!stats"))
@@ -139,6 +145,7 @@ public class BoodoBot extends ListenerAdapter
 			
 			if (chosenChannel == null) {
 				System.err.println("!stats <channel> : this channel doesn't exist");
+				channel.sendMessage("!stats <channel> : this channel doesn't exist").queue();
 				return;
 			}
 			
@@ -149,6 +156,29 @@ public class BoodoBot extends ListenerAdapter
 			else {
 				channel.sendMessage("La commande a échoué !").queue();
 			}
+		}
+		
+		// Insult a random perso on the channel
+		else if (msg.equals("!insult"))
+		{
+			System.out.println("Call command " + msg);
+			
+			if (channel.getMembers().size() <= 2)
+				return;
+			
+			Random rand = new Random();
+			String memberChosenId = BOT_ID;
+
+			while (memberChosenId.equals(BOT_ID) || memberChosenId.equals(author.getId())) {
+				memberChosenId = channel.getMembers().get(rand.nextInt(channel.getMembers().size())).getUser().getId();
+			}
+			
+			String mention = server.getMemberById(memberChosenId).getAsMention();
+			
+			String insult = insultsCollection.aggregate(Arrays.asList(Aggregates.sample(1))).first().getString("message");
+			insult = insult.replaceFirst("@name", mention);
+			
+			channel.sendMessage(insult).queue();
 		}
 		
 		// Clear all messages that are not integers (for debug purpose)

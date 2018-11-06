@@ -10,6 +10,7 @@ import org.bson.types.ObjectId;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Sorts;
 import com.mongodb.client.model.Updates;
 
 import net.dv8tion.jda.core.entities.Guild;
@@ -88,9 +89,15 @@ public class MessageStats
 			
 			// else, add a new document
 			else {
+				String userName;
+				if (server.getMemberById(entry.getKey()) != null)
+					userName = server.getMemberById(entry.getKey()).getEffectiveName();
+				else	// if a member has left the server but still has messages on it
+					userName = "Déserteur";
+				
 				documents.add(new Document(SERVER_NAME_KEY, server.getName())
 						.append(CHANNEL_NAME_KEY, channel.getName())
-						.append(USER_NAME_KEY, server.getMemberById(entry.getKey()).getEffectiveName())
+						.append(USER_NAME_KEY, userName)
 						.append(NB_MESSAGES_KEY, entry.getValue())
 						.append(TOTAL_MESSAGES_CHANNEL_KEY, 0)
 						.append(CHANNEL_ID_KEY, channel.getId())
@@ -126,15 +133,15 @@ public class MessageStats
 	
 	public void sendStatsAsMessage(TextChannel channelMessaged, String channelRequestedId)
 	{	
-		FindIterable<Document> ite = collection.find(Filters.eq(CHANNEL_ID_KEY, channelRequestedId));
+		FindIterable<Document> ite = collection.find(Filters.eq(CHANNEL_ID_KEY, channelRequestedId)).sort(Sorts.descending(NB_MESSAGES_KEY));
 		
 		int totalMsg = (int) ite.first().get(TOTAL_MESSAGES_CHANNEL_KEY);
 		String botMsg = "Nombre total de messages : " + totalMsg + "\n";
 		
 		for (Document doc : ite) {
 			int nbMsg = (int) doc.get(NB_MESSAGES_KEY);
-			botMsg += (String) doc.get(USER_NAME_KEY) + " a écrit " + nbMsg + " messages";
-			botMsg += ", soit " + String.format("%.1f", ((float)(nbMsg * 100) / totalMsg)) + "% de tous les messages.\n";
+			botMsg += (String) doc.get(USER_NAME_KEY) + " : " + nbMsg + " messages";
+			botMsg += ", soit " + String.format("%.1f", ((float)(nbMsg * 100) / totalMsg)) + "%\n";
 		}
 
 		channelMessaged.sendMessage(botMsg).queue();
