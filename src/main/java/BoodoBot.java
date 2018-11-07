@@ -28,6 +28,7 @@ public class BoodoBot extends ListenerAdapter
 	/********************************************************************************************************************************/
 	
 	private final static String BOT_TOKEN_FILE_NAME = "bot_token.txt";
+	private final static String MONGODB_AUTHENTIFICATION_DATA_FILE_NAME = "db_auth.txt";
 	private final static String MONGODB_DB_NAME = "BoodoBot";
 	private final static String MONGODB_MESSAGE_STATS_NAME = "MessageStats";
 	private final static String MONGODB_INSULTS_NAME = "Insultes";
@@ -47,8 +48,9 @@ public class BoodoBot extends ListenerAdapter
 	public static void main(String[] args)
 	{
 		try {
-			// Retrieve the bot token
-			String botToken = new String(Files.readAllBytes(Paths.get(BOT_TOKEN_FILE_NAME))); 
+			// Retrieve the bot token and the mongodb authentification data
+			String botToken = new String(Files.readAllBytes(Paths.get(BOT_TOKEN_FILE_NAME)));
+			String dbAuth = new String(Files.readAllBytes(Paths.get(MONGODB_AUTHENTIFICATION_DATA_FILE_NAME)));
 			
 			// Build JDA
 			JDA jda = new JDABuilder(botToken)
@@ -56,7 +58,7 @@ public class BoodoBot extends ListenerAdapter
 					.build();
 			
 			// Connection to MongoDB
-			MongoClient mongoClient = MongoClients.create();
+			MongoClient mongoClient = MongoClients.create("mongodb://" + dbAuth);
 			MongoDatabase database = mongoClient.getDatabase(MONGODB_DB_NAME);
 			messageStatsCollection = database.getCollection(MONGODB_MESSAGE_STATS_NAME);
 			insultsCollection = database.getCollection(MONGODB_INSULTS_NAME);
