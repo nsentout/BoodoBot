@@ -2,6 +2,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 import org.bson.Document;
 import org.bson.conversions.Bson;
@@ -14,7 +15,10 @@ import com.mongodb.client.model.Sorts;
 import com.mongodb.client.model.Updates;
 
 import net.dv8tion.jda.core.entities.Guild;
+import net.dv8tion.jda.core.entities.Message;
+import net.dv8tion.jda.core.entities.MessageHistory;
 import net.dv8tion.jda.core.entities.TextChannel;
+import net.dv8tion.jda.core.requests.RequestFuture;
 
 public class MessageStats
 {
@@ -29,14 +33,14 @@ public class MessageStats
 	
 	public MongoCollection<Document> collection;
 	
-	public HashMap<String, Integer> nbMessagesByAuthor;
+	public HashMap<String, Integer> newMessagesByAuthor;
 
 	/******************************************************************************************************************************************/
 	
 	public MessageStats(MongoCollection<Document> collection)
 	{
 		this.collection = collection;
-		this.nbMessagesByAuthor = new HashMap<String, Integer>();
+		this.newMessagesByAuthor = new HashMap<String, Integer>();
 	}
 	
 	/******************************************************************************************************************************************/
@@ -55,7 +59,7 @@ public class MessageStats
 			totalMsg += (int)doc.get(NB_MESSAGES_KEY);
 		}
 		
-		for (Map.Entry<String, Integer> entry : nbMessagesByAuthor.entrySet())
+		for (Map.Entry<String, Integer> entry : newMessagesByAuthor.entrySet())
 		{
 			// add all the new messages
 			totalMsg += entry.getValue();
@@ -146,11 +150,81 @@ public class MessageStats
 
 		channelMessaged.sendMessage(botMsg).queue();
 		
-		nbMessagesByAuthor.clear();
+		newMessagesByAuthor.clear();
 	}
 	
 	public void sendStatsAsMessage(TextChannel channelMessaged)
 	{	
 		sendStatsAsMessage(channelMessaged, channelMessaged.getId());
+	}
+	
+	/******************************************************************************************************************************************/
+	
+	public boolean retrieveChannelStats(TextChannel channel)
+	{
+		if (!channel.hasLatestMessage()) {
+			System.out.println("The channel doesn't have a tracked most recent message");
+			return false;
+		}
+
+		String lastMsgId;	// last message retrieved
+		boolean firstTime = false;	// first time calling the stats command
+
+		// If first time getting the stats of this channel, retrieve all messages since the creation of the channel
+		if (getLastMessageReadId(channel.getId()).isEmpty()) {
+			lastMsgId = channel.getLatestMessageId();
+			firstTime = true;
+		}
+		// Else, retrieve all messages since the last time we get the stats
+		else {
+			lastMsgId = getLastMessageReadId(channel.getId());
+		}
+
+		RequestFuture<MessageHistory> request;
+		List<Message> messagesRetrieved = null;
+
+		int nbReadMsg = 0;
+
+		// Retrieve messages
+		try {
+			while (true) {
+				if (firstTime)
+					request = channel.getHistoryBefore(lastMsgId, 20).submit();	// get the 100 messages sent before the <lastMsgId> message
+				else
+					request = channel.getHistoryAfter(lastMsgId, 20).submit();	// get the 100 messages sent after the <lastMsgId> message
+
+				nbReadMsg =  request.get().size();	// request.get() is very expansive
+
+				if (nbReadMsg == 0)
+					break;
+
+				messagesRetrieved = request.get().getRetrievedHistory();
+
+				for (Message m : messagesRetrieved) {
+					String authorId = m.getAuthor().getId();
+
+					if (!newMessagesByAuthor.containsKey(authorId)) {
+						newMessagesByAuthor.put(authorId, 0);
+					}
+					newMessagesByAuthor.put(authorId, newMessagesByAuthor.get(authorId) + 1);
+				}
+
+				if (firstTime)
+					lastMsgId = messagesRetrieved.get(nbReadMsg - 1).getId();	// last message read
+				else
+					lastMsgId = messagesRetrieved.get(0).getId();	// last message read
+			}			
+		}
+		catch (InterruptedException | ExecutionException e) {
+			e.printStackTrace();
+		}
+
+		// Save the stats in the db
+		if (firstTime)
+			lastMsgId = channel.getLatestMessageId();
+
+		saveMessageStats(channel, lastMsgId);
+
+		return true;
 	}
 }
