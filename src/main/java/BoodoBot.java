@@ -29,9 +29,9 @@ public class BoodoBot extends ListenerAdapter
 	
 	private final static String BOT_TOKEN_FILE_NAME = "bot_token.txt";
 	private final static String MONGODB_AUTHENTIFICATION_DATA_FILE_NAME = "db_auth.txt";
-	private final static String MONGODB_DB_NAME = "BoodoBot";
-	private final static String MONGODB_MESSAGE_STATS_NAME = "MessageStats";
-	private final static String MONGODB_INSULTS_NAME = "Insultes";
+	private final static String MONGODB_DB_NAME = "boodobot";
+	private final static String MONGODB_MESSAGE_STATS_NAME = "msgstats";
+	private final static String MONGODB_INSULTS_NAME = "insultes";
 	private final static String BOT_ID = "504368489415573514";
 	
 	private final static Logger logger = LogManager.getLogger(BoodoBot.class);
@@ -65,12 +65,11 @@ public class BoodoBot extends ListenerAdapter
 			
 			// Prepares bot features
 			msgStats = new MessageStats(messageStatsCollection);
-			dddLimitedMsg = new LimitedMessage(":ddd: ?", 180);
-			quandLimitedMsg = new LimitedMessage("MAINTENAAAAANT ...\n\nhttps://www.youtube.com/watch?v=w1HvkAgr92c", 600);
+			quandLimitedMsg = new LimitedMessage("MAINTENAAAAANT ...\n\nhttps://www.youtube.com/watch?v=w1HvkAgr92c", 300);
 			
 			// Wait for jda to be ready
 			jda.awaitReady();
-            
+			    
 			System.out.println("Finished building JDA!");
 		}
 		catch (LoginException | InterruptedException e) {
@@ -80,9 +79,9 @@ public class BoodoBot extends ListenerAdapter
 			System.err.println("An error occured when reading the file containing the bot token");
 		}
 	}
-
+	
 	/********************************************************************************************************************************/
-    
+	
     @Override
     public void onMessageReceived(MessageReceivedEvent event)
     {
@@ -194,6 +193,16 @@ public class BoodoBot extends ListenerAdapter
 		// Private joke 2
 		else if ((msg.contains("ddd") || msg.contains("approche objet") || msg.contains(" ao ")) && !author.getId().equals(BOT_ID))
 		{
+			Emote emote = server.getEmotesByName("ddd", true).get(0);
+			if (emote != null) {
+				if (dddLimitedMsg == null)
+					dddLimitedMsg = new LimitedMessage(emote.getAsMention(), 180);
+			}
+			else {
+				System.out.println("this emote doesn't exist on this server");
+				return;
+			}
+			
 			dddLimitedMsg.send(channel);
 		}
 
