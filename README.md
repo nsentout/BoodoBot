@@ -1,3 +1,3 @@
 # BoodoBot
 
-Discord bot doing stuff ... (WIP)
+Discord bot doing stuff ...

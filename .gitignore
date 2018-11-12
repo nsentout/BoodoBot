@@ -22,6 +22,8 @@ gradle-app.setting
 .settings/
 bin/
 
+# Log4j
+output.log
+
 # BoodoBot
-bot_token.txt
-db_auth.txt
+
