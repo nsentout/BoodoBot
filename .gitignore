@@ -26,4 +26,5 @@ bin/
 output.log
 
 # BoodoBot
-
+/src/main/resources/bot_token.txt
+/src/main/resources/db_auth.txt
